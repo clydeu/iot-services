@@ -19,6 +19,7 @@ namespace iot_services.Services
         private readonly int serverPort = 587;
         private readonly Func<string, Task> motionDetected;
         private readonly string[] emailSubjects;
+        private readonly Dictionary<string, Func<MimeMessage, string?>> emailActions;
 
         public MailService(Func<string, Task> motionDetected)
         {
@@ -40,6 +41,12 @@ namespace iot_services.Services
 
             smtpServer = new SmtpServer.SmtpServer(options, serviceProvider);
             this.motionDetected = motionDetected;
+
+            emailActions = new Dictionary<string, Func<MimeMessage, string?>>
+            {
+                { "swann@macbuntu.com", SwannEmailAction },
+                { "reolink@macbuntu.com", ReolinkEmailAction }
+            };
         }
 
         public Task<bool> AuthenticateAsync(ISessionContext context, string user, string password, CancellationToken cancellationToken)
@@ -68,12 +75,16 @@ namespace iot_services.Services
             stream.Position = 0;
 
             var message = await MimeMessage.LoadAsync(stream, cancellationToken);
+            if (message == null)
+                return SmtpResponse.TransactionFailed;
 
             logger.Debug("{from}: {subject}", message.From, message.Subject);
             logger.Debug("body: {body}", string.Join(", ", message.TextBody.Trim().Split(Environment.NewLine).Where(x => x != string.Empty)));
-            if (emailSubjects.Contains(message.Subject))
+            var from = message.From.Mailboxes.First().Address;
+            var fromAction = emailActions[from];
+            if (fromAction != null)
             {
-                var channel = GetChannel(message.TextBody);
+                var channel = fromAction(message);
                 logger.Debug("Channel: {channel}", channel);
                 if (!string.IsNullOrWhiteSpace(channel))
                     await motionDetected(channel);
@@ -82,7 +93,28 @@ namespace iot_services.Services
             return SmtpResponse.Ok;
         }
 
-        public string GetChannel(string bodyText)
+        internal string? ReolinkEmailAction(MimeMessage message)
+        {
+            return ReolinkGetChannel(message.TextBody);
+        }
+
+        public string ReolinkGetChannel(string bodyText)
+        {
+            return bodyText.Split(",").Last().Split(":").Last().Replace(" Camera", "").Replace(" ", "-").ToLowerInvariant();
+        }
+
+        private string? SwannEmailAction(MimeMessage message)
+        {
+            if (emailSubjects.Contains(message.Subject))
+            {
+                var channel = SwannGetChannel(message.TextBody);
+                return channel;
+            }
+
+            return null;
+        }
+
+        public string SwannGetChannel(string bodyText)
         {
             var strReader = new StringReader(bodyText);
             string? str = null;

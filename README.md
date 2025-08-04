@@ -7,7 +7,7 @@
 
 ### SMTP Server
 * Port 587
-* Process Swann email for motion detection.
+* Process Camera email for motion detection.
 
 ### MQTT Broker
 * Port 1883
