@@ -100,7 +100,7 @@ namespace iot_services.Services
 
         public string ReolinkGetChannel(string bodyText)
         {
-            return bodyText.Split(",").Last().Split(":").Last().Replace(" Camera", "").Replace(" ", "-").ToLowerInvariant();
+            return bodyText.Split(",").Last().Split(":").Last().Replace(" Camera", "").Replace(" ", "-").ToLowerInvariant().Trim();
         }
 
         private string? SwannEmailAction(MimeMessage message)
